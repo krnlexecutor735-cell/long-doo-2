@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs@1.0.2/dist/auto/chaoticOrbit.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        #loader-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #e9eef2;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 99999;
+            transition: opacity 0.5s ease;
+        }
+
+        #fade {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #e9eef2;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.35s ease;
+        }
+        #fade.in { opacity: 1; pointer-events: all; }
+
+        body {
+            margin: 0; background: #e9eef2;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; font-family: sans-serif;
+        }
+
+        .container {
+            position: relative;
+            background: white;
+            padding: 40px 50px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            width: 420px;
+            max-width: 90vw;
+        }
+
+        .q-text {
+            font-size: 22px;
+            font-weight: 700;
+            color: #222;
+            margin-bottom: 32px;
+        }
+
+        .options {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        input[type="radio"] { display: none; }
+
+        .label {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #444;
+            cursor: pointer;
+            position: relative;
+            z-index: 2;
+            user-select: none;
+            width: 100%;
+            height: 60px;
+            transition: color 0.25s;
+        }
+
+        .label::before {
+            content: '';
+            width: 28px; height: 28px;
+            border: 3px solid #ccc;
+            border-radius: 50%;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            transition: border-color 0.25s;
+        }
+
+        input:checked + .label::before { border-color: #1f6feb; }
+        input:checked + .label { color: #1f6feb; }
+
+        .worm {
+            position: absolute;
+            left: 7px;
+            width: 14px;
+            height: 14px;
+            background: #1f6feb;
+            border-radius: 20px;
+            transition: top 0.25s cubic-bezier(0.25,0.1,0.25,1),
+                        height 0.25s cubic-bezier(0.25,0.1,0.25,1);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .result-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0;
+        }
+        .score-ring {
+            width: 120px; height: 120px;
+            border: 5px solid #1f6feb;
+            border-radius: 50%;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .score-num { font-size: 38px; font-weight: 700; color: #1f6feb; line-height: 1; }
+        .score-of  { font-size: 15px; color: #bbb; }
+    </style>
+</head>
+<body>
+
+<div id="loader-overlay">
+    <l-chaotic-orbit size="50" speed="1.5" color="black"></l-chaotic-orbit>
+</div>
+
+<div id="fade">
+    <l-chaotic-orbit size="40" speed="1.5" color="black"></l-chaotic-orbit>
+</div>
+
+<div class="container" id="card"></div>
+
+<script>
+    const questions = [
+        { text: '7x - 11 = 3x + 13',     opts: ['5','6','7'],    ans: 1 },
+        { text: '3(2x + 5) = 4x + 25',   opts: ['4','5','6'],    ans: 1 },
+        { text: '(4x - 2) / 3 = x + 2',  opts: ['8','6','10'],   ans: 0 },
+        { text: '5(x - 3) = 2(x + 6)',   opts: ['7','11','9'],   ans: 2 },
+        { text: '2x / 3 + 4 = x - 2',    opts: ['20','16','18'], ans: 1 },
+    ];
+
+    let userAnswers = new Array(questions.length).fill(null);
+    const fade = document.getElementById('fade');
+
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            const ov = document.getElementById('loader-overlay');
+            ov.style.opacity = '0';
+            setTimeout(() => ov.style.display = 'none', 500);
+        }, 5000);
+    });
+
+    const ROW_H = 60;
+    const wormCenter = i => i * ROW_H + (ROW_H / 2) - 7;
+
+    function transition(cb) {
+        fade.classList.add('in');
+        setTimeout(() => {
+            cb();
+            setTimeout(() => fade.classList.remove('in'), 50);
+        }, 350);
+    }
+
+    function render(idx) {
+        const q    = questions[idx];
+        const card = document.getElementById('card');
+
+        card.innerHTML = `
+            <div class="q-text">${q.text}</div>
+            <div class="options" id="opts">
+                <div class="worm" id="worm"></div>
+                ${q.opts.map((o,i) => `
+                    <input type="radio" name="q" id="o${i}" value="${i}">
+                    <label for="o${i}" class="label">${o}</label>
+                `).join('')}
+            </div>
+        `;
+
+        const worm = document.getElementById('worm');
+        let wormY = wormCenter(0);
+        worm.style.top = wormY + 'px';
+
+        document.querySelectorAll('input[type="radio"]').forEach((r, i) => {
+            r.addEventListener('change', () => {
+                const targetY = wormCenter(i);
+                const diff    = Math.abs(targetY - wormY);
+                const goingDown = targetY > wormY;
+
+                worm.style.height = (diff + 14) + 'px';
+                worm.style.top    = (goingDown ? wormY : targetY) + 'px';
+
+                setTimeout(() => {
+                    worm.style.height = '14px';
+                    worm.style.top    = targetY + 'px';
+                }, 120);
+
+                wormY = targetY;
+                userAnswers[idx] = i;
+
+                setTimeout(() => {
+                    transition(() => {
+                        if (idx < questions.length - 1) render(idx + 1);
+                        else showResult();
+                    });
+                }, 300);
+            });
+        });
+    }
+
+    function showResult() {
+        let score = 0;
+        userAnswers.forEach((a, i) => { if (a === questions[i].ans) score++; });
+
+        document.getElementById('card').innerHTML = `
+            <div class="result-wrap">
+                <div class="score-ring">
+                    <span class="score-num">${score}</span>
+                    <span class="score-of">/ ${questions.length}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    render(0);
+</script>
+</body>
+</html>
